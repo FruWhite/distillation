@@ -6,14 +6,14 @@ import torch
 import torch.nn as nn
 DEVICE = "cuda"
 import wandb
+import numpy as np
+
 
 def kd_epoch(student_model, teacher_model, train_loader, optimizer, loss_fn, config, logits=None):
     student_model.train()
-    teacher_model.eval()
     total_loss = 0
-    loop = tqdm(train_loader, desc="Training", ncols=100)
     if not config.teacher_logits_available:
-        for images, labels in loop:
+        for images, labels in tqdm(train_loader):
             images, labels = images.to(DEVICE), labels.to(DEVICE)
 
             # 教师模型输出（无需梯度）
@@ -31,12 +31,13 @@ def kd_epoch(student_model, teacher_model, train_loader, optimizer, loss_fn, con
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            loop.set_postfix(loss=loss.item())
+
     else:
-        for i, (images, labels) in enumerate(loop):
+        logits.to(DEVICE)
+        for i, (images, labels) in tqdm(enumerate(train_loader)):
             images, labels = images.to(DEVICE), labels.to(DEVICE)
 
-            teacher_logits = logits[i * config.batchsize: min(logits.shape[0], (i + 1) * config.batchsize), :]
+            teacher_logits = logits[i * config.batchsize: min(logits.shape[0], (i + 1) * config.batchsize), :].to(DEVICE)
 
             # 学生模型输出
             student_logits = student_model(images)
@@ -49,9 +50,6 @@ def kd_epoch(student_model, teacher_model, train_loader, optimizer, loss_fn, con
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-
-            loop.set_postfix(loss=loss.item())
-
 
     return total_loss / len(train_loader)
 
@@ -88,7 +86,7 @@ def kd_train(student_model, teacher_model, train_loader, val_loader, optim, dist
 
     for epoch in range(EPOCHS):
         print(f"Epoch {epoch + 1}/{EPOCHS}")
-        train_loss = kd_epoch(student_model, teacher_model, train_loader, optim, distillation_loss, config)
+        train_loss = kd_epoch(student_model, teacher_model, train_loader, optim, distillation_loss, config, logits)
         val_accuracy = evaluate(student_model, val_loader)
         print(f"Loss: {train_loss:.4f}, Val Accuracy: {val_accuracy:.4f}")
         if val_accuracy > student_model.best_metric:
@@ -129,6 +127,25 @@ def train_epoch(model, train_loader, optimizer, criterion, config):
     return epoch_loss
 
 
+def base_train(student_model, train_loader, val_loader, optim, config):
+    EPOCHS = config.epochs
+
+    nowtime = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    wandb.init(project=config.project_name, config=config.__dict__, name=nowtime, save_code=True)
+    student_model.run_id = wandb.run.id
+    student_model.best_metric = -1.
+    logits = None
+
+    for epoch in range(EPOCHS):
+        print(f"Epoch {epoch + 1}/{EPOCHS}")
+        train_loss = train_epoch(student_model, train_loader, optim, nn.CrossEntropyLoss(), config)
+        val_accuracy = evaluate(student_model, val_loader)
+        print(f"Loss: {train_loss:.4f}, Val Accuracy: {val_accuracy:.4f}")
+        if val_accuracy > student_model.best_metric:
+            student_model.best_metric = val_accuracy
+        wandb.log({'epoch': epoch + 1, "val_acc": val_accuracy, "best_val_acc": student_model.best_metric})
+    wandb.finish()
+    return student_model
 
 
 

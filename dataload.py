@@ -15,7 +15,6 @@ def is_rgb(D):
     # Check if images are RGB or grayscale by looking at the number of channels in the first image
     dataset = D(split='train', download=True)
     sample_image, _ = dataset[0]
-    print(sample_image.size)
     return sample_image.size[0] == 3  # Check the number of channels (should be 3 for RGB)
 
 
