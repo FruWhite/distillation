@@ -88,7 +88,7 @@ if __name__ == "__main__":
     # dataset_name = 'pneumoniamnist'
     # dataset_name = 'retinamnist'
     # dataset_name = 'breastmnist'
-    dataset_name = 'tissuemnist'
+    # dataset_name = 'tissuemnist'
     # dataset_name = 'organamnist'
     # dataset_name = 'organsmnist'
     # dataset_name = 'organcmnist'
@@ -106,16 +106,18 @@ if __name__ == "__main__":
         loss_init_params=(),
         teacher_logits_available = True,
     )
-    # show_data(load_medmnist(config)[0])
-    save_teacher_logits(config)
+    # # show_data(load_medmnist(config)[0])
+    # save_teacher_logits(config)
     # train_loader, val_loader, test_loader = load_medmnist(config)
     # show_data(val_loader)
 
     # kd_main(config)
 
-    # for v in logits_dist_losses.values():
-    #     config.loss_type = v
-    #     kd_main(config)
+    df = main_logits(config, dataset_names, logits_dist_losses.keys())
+    print(df)
+    df.to_csv("result/logits_on_medmnist.csv", sep=',', index=True, header=True)
+    df.to_excel("result/logits_on_medmnist.xlsx", sep='\t', index=True, header=True)
+
 
 
 
