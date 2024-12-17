@@ -6,9 +6,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-def load_medmnist(config, dataset_name='bloodmnist'):
+def load_medmnist(config):
     # 获取数据集的相关信息
     BATCH_SIZE = config.batchsize
+    dataset_name = config.dataset_name
     info = INFO[dataset_name]
     DataClass = getattr(medmnist, info['python_class'])
 
