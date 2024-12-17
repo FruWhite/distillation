@@ -54,8 +54,8 @@ class DKD(nn.Module):
         self.beta = beta
         self.temperature = temperature
 
-    def forward(self, z_s, z_t, **kwargs):
-        target = kwargs['target']
+    def forward(self, z_s, z_t, target):
+        # target = kwargs['target']
         if len(target.shape) == 2:  # mixup / smoothing
             target = target.max(1)[1]
         kd_loss = dkd_loss(z_s, z_t, target, self.alpha, self.beta, self.temperature)

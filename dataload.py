@@ -1,32 +1,53 @@
 import medmnist
 from medmnist import INFO
+import torch
+from torch.utils.data import TensorDataset, DataLoader
+from tqdm import tqdm
 from torchvision import transforms
 from torch.utils.data import DataLoader
 import matplotlib.pyplot as plt
 import numpy as np
+from models import ViTTeacher
+DEVICE = "cuda"
 
 
-def load_medmnist(config):
-    # 获取数据集的相关信息
+def is_rgb(D):
+    # Check if images are RGB or grayscale by looking at the number of channels in the first image
+    dataset = D(split='train', download=True)
+    sample_image, _ = dataset[0]
+    print(sample_image.size)
+    return sample_image.size[0] == 3  # Check the number of channels (should be 3 for RGB)
+
+
+def load_medmnist(config, shuffle=True):
+
     BATCH_SIZE = config.batchsize
     dataset_name = config.dataset_name
+    if config.teacher_logits_available:
+        shuffle = False
     info = INFO[dataset_name]
     DataClass = getattr(medmnist, info['python_class'])
 
-    # 数据增强及预处理
-    transform = transforms.Compose([
-        transforms.Resize((224, 224)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[.5], std=[.5])  # 对数据进行归一化
-    ])
-
+    if is_rgb(DataClass):
+        transform = transforms.Compose([
+            transforms.Resize((224, 224)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[.5], std=[.5])
+        ])
+    else:
+        transform = transforms.Compose([
+            transforms.Resize((224, 224)),
+            transforms.Grayscale(num_output_channels=3),  # Convert grayscale to 3 channels (RGB)
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])  # Normalize
+        ])
     # 加载数据集
     train_dataset = DataClass(split='train', transform=transform, download=True)
     val_dataset = DataClass(split='val', transform=transform, download=True)
     test_dataset = DataClass(split='test', transform=transform, download=True)
 
     # 构建 DataLoader
-    train_loader = DataLoader(dataset=train_dataset, batch_size=BATCH_SIZE, shuffle=True)
+    train_loader = DataLoader(dataset=train_dataset, batch_size=BATCH_SIZE, shuffle=shuffle)
     val_loader = DataLoader(dataset=val_dataset, batch_size=BATCH_SIZE, shuffle=False)
     test_loader = DataLoader(dataset=test_dataset, batch_size=BATCH_SIZE, shuffle=False)
     return train_loader, val_loader, test_loader
@@ -52,6 +73,33 @@ def show_data(loader):
     plt.tight_layout()
     plt.show()
 
+
+def save_teacher_logits(config):
+    train_loader, val_loader, test_loader = load_medmnist(config, shuffle=False)
+    teacher = ViTTeacher(config.class_num).to(DEVICE)
+    teacher.eval()
+    # Tensors to store the images and teacher logits
+    # labels_list = []
+    labels_tensor = torch.empty((len(train_loader.dataset), config.class_num))
+    # Loop through the dataset and collect the necessary data
+    with torch.no_grad():
+        for i, (images, labels) in enumerate(tqdm(train_loader, desc="Extracting logits from teacher")):
+            images = images.to(DEVICE)
+            labels = labels.to(DEVICE)
+
+            # Get teacher logits
+            teacher_logits = teacher(images)  # (batch_size, num_classes)
+
+            # Append images, logits, and labels
+            # labels_list.append(labels)
+            labels_tensor[i * config.batchsize: min(labels_tensor.shape[0], (i + 1) * config.batchsize), :] = teacher_logits
+
+    # Concatenate all batches into a single tensor for each
+    # labels_tensor = torch.cat(labels_list, dim=0)  # Shape: (N,)
+
+    # Create a dataset that combines images and precomputed logits
+    print("FINISH")
+    torch.save(labels_tensor, f"logits/{config.dataset_name}_vit.npz")
 
 
 

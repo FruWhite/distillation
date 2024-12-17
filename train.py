@@ -7,34 +7,51 @@ import torch.nn as nn
 DEVICE = "cuda"
 import wandb
 
-def kd_epoch(student_model, teacher_model, train_loader, optimizer, loss_fn):
+def kd_epoch(student_model, teacher_model, train_loader, optimizer, loss_fn, config, logits=None):
     student_model.train()
     teacher_model.eval()
     total_loss = 0
+    loop = tqdm(train_loader, desc="Training", ncols=100)
+    if not config.teacher_logits_available:
+        for images, labels in loop:
+            images, labels = images.to(DEVICE), labels.to(DEVICE)
 
-    # 添加进度条
-    loop = tqdm(train_loader, desc="Training", ncols=100)  # 添加进度条
-    for images, labels in loop:
-        images, labels = images.to(DEVICE), labels.to(DEVICE)
+            # 教师模型输出（无需梯度）
+            with torch.no_grad():
+                teacher_logits = teacher_model(images)
 
-        # 教师模型输出（无需梯度）
-        with torch.no_grad():
-            teacher_logits = teacher_model(images)
+            # 学生模型输出
+            student_logits = student_model(images)
 
-        # 学生模型输出
-        student_logits = student_model(images)
+            # 计算损失
+            loss = loss_fn(student_logits, teacher_logits, labels)
+            total_loss += loss.item()
 
-        # 计算损失
-        loss = loss_fn(student_logits, teacher_logits, labels)
-        total_loss += loss.item()
+            # 反向传播与优化
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            loop.set_postfix(loss=loss.item())
+    else:
+        for i, (images, labels) in enumerate(loop):
+            images, labels = images.to(DEVICE), labels.to(DEVICE)
 
-        # 反向传播与优化
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+            teacher_logits = logits[i * config.batchsize: min(logits.shape[0], (i + 1) * config.batchsize), :]
 
-        # 更新进度条的描述
-        loop.set_postfix(loss=loss.item())
+            # 学生模型输出
+            student_logits = student_model(images)
+
+            # 计算损失
+            loss = loss_fn(student_logits, teacher_logits, labels)
+            total_loss += loss.item()
+
+            # 反向传播与优化
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+            loop.set_postfix(loss=loss.item())
+
 
     return total_loss / len(train_loader)
 
@@ -65,9 +82,13 @@ def kd_train(student_model, teacher_model, train_loader, val_loader, optim, dist
     wandb.init(project=config.project_name, config=config.__dict__, name=nowtime, save_code=True)
     student_model.run_id = wandb.run.id
     student_model.best_metric = -1.
+    logits = None
+    if config.teacher_logits_available:
+        logits = torch.load(f"logits/{config.dataset_name}_vit.npz")
+
     for epoch in range(EPOCHS):
         print(f"Epoch {epoch + 1}/{EPOCHS}")
-        train_loss = kd_epoch(student_model, teacher_model, train_loader, optim, distillation_loss)
+        train_loss = kd_epoch(student_model, teacher_model, train_loader, optim, distillation_loss, config)
         val_accuracy = evaluate(student_model, val_loader)
         print(f"Loss: {train_loss:.4f}, Val Accuracy: {val_accuracy:.4f}")
         if val_accuracy > student_model.best_metric:

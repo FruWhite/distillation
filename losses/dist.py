@@ -1,4 +1,5 @@
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 def cosine_similarity(a, b, eps=1e-8):
@@ -26,9 +27,10 @@ class DIST(nn.Module):
         self.tau = tau
 
     def forward(self, z_s, z_t, **kwargs):
-        y_s = (z_s / self.tau).softmax(dim=1)
-        y_t = (z_t / self.tau).softmax(dim=1)
-        inter_loss = self.tau ** 2 * inter_class_relation(y_s, y_t)
-        intra_loss = self.tau ** 2 * intra_class_relation(y_s, y_t)
+
+        y_s = F.softmax(z_s / self.tau, dim=1)
+        y_t = F.softmax(z_t / self.tau, dim=1)
+        inter_loss = (self.tau ** 2) * inter_class_relation(y_s, y_t)
+        intra_loss = (self.tau ** 2) * intra_class_relation(y_s, y_t)
         kd_loss = self.beta * inter_loss + self.gamma * intra_loss
         return kd_loss
