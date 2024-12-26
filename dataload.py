@@ -8,6 +8,9 @@ from torch.utils.data import DataLoader
 import matplotlib.pyplot as plt
 import numpy as np
 from models import ViTTeacher
+import os
+import pandas as pd
+
 DEVICE = "cuda"
 
 
@@ -22,7 +25,7 @@ def load_medmnist(config, shuffle=True):
 
     BATCH_SIZE = config.batchsize
     dataset_name = config.dataset_name
-    if config.teacher_logits_available:
+    if config.use_saved_teacher_logits:
         shuffle = False
     info = INFO[dataset_name]
     DataClass = getattr(medmnist, info['python_class'])
@@ -50,6 +53,7 @@ def load_medmnist(config, shuffle=True):
     val_loader = DataLoader(dataset=val_dataset, batch_size=BATCH_SIZE, shuffle=False)
     test_loader = DataLoader(dataset=test_dataset, batch_size=BATCH_SIZE, shuffle=False)
     return train_loader, val_loader, test_loader
+
 
 def show_data(loader):
     # 获取十个训练样本
@@ -99,6 +103,25 @@ def save_teacher_logits(config):
     # Create a dataset that combines images and precomputed logits
     print("FINISH")
     torch.save(labels_tensor, f"logits/{config.dataset_name}_vit.npz")
+
+
+def load_teacher_logits_tensor(dataset_name):
+    # read in logits from ResNet50
+    # dir = "/Users/fructuswhite/courses/24fall/Computer-Vision/final-pj/distillation/logits"
+    # dir = os.path.dirname(os.path.realpath('__file__')) + "/logits"
+    dir = os.getcwd() + "/logits"
+    print(dir)
+    logits = None
+    for filename in os.listdir(dir):
+        if filename.startswith(dataset_name) and filename.endswith(".csv"):
+            print(f"Find logits: {filename}")
+            p = os.path.join(dir, filename)
+            df = pd.read_csv(p)
+            df = df.to_numpy()
+            logits = torch.tensor(df, dtype=torch.float32)
+    if logits is None:
+        raise Exception("logits not found.")
+    return logits
 
 
 
