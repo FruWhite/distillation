@@ -1,7 +1,7 @@
 import torch
 import os
 import pandas as pd
-
+from torch import optim
 import wandb
 import random
 from argparse import Namespace
@@ -146,10 +146,10 @@ if __name__ == "__main__":
     set = []
     set.append(('breastmnist', 'retinamnist', 'pneumoniamnist', 'dermamnist',
             'bloodmnist', 'organcmnist', 'organsmnist'))
-    set.append(('organamnist'))
-    set.append(('pathmnist'))
-    set.append(('octmnist'))
-    set.append(('chestmnist'))
+    set.append(('organamnist', ))
+    set.append(('pathmnist', ))
+    set.append(('octmnist', ))
+    set.append(('chestmnist', ))
 
     i = 0 # 0, 1, 2, 3, 4
     df = main_logits(config, set[i], logits_dist_losses.keys())
