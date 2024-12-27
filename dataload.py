@@ -102,25 +102,34 @@ def save_teacher_logits(config):
 
     # Create a dataset that combines images and precomputed logits
     print("FINISH")
-    torch.save(labels_tensor, f"logits/{config.dataset_name}_vit.npz")
 
 
-def load_teacher_logits_tensor(dataset_name):
+
+def load_teacher_logits_tensor(dataset_name, teacher="resnet50"):
     # read in logits from ResNet50
     # dir = "/Users/fructuswhite/courses/24fall/Computer-Vision/final-pj/distillation/logits"
     # dir = os.path.dirname(os.path.realpath('__file__')) + "/logits"
     dir = os.getcwd() + "/logits"
-    print(dir)
+    # print(dir)
     logits = None
-    for filename in os.listdir(dir):
-        if filename.startswith(dataset_name) and filename.endswith(".csv"):
-            print(f"Find logits: {filename}")
-            p = os.path.join(dir, filename)
-            df = pd.read_csv(p)
-            df = df.to_numpy()
-            logits = torch.tensor(df, dtype=torch.float32)
+    if teacher == "resnet50":
+        for filename in os.listdir(dir):
+            if filename.startswith(dataset_name) and filename.endswith(".csv"):
+                print(f"Find logits: {filename}")
+                p = os.path.join(dir, filename)
+                df = pd.read_csv(p)
+                df = df.to_numpy()
+                logits = torch.tensor(df, dtype=torch.float32)
+    elif teacher == "vit":
+        for filename in os.listdir(dir):
+            if filename.startswith(dataset_name) and filename.endswith("_vit.npz"):
+                print(f"Find logits: {filename}")
+                p = os.path.join(dir, filename)
+                logits = torch.load(p)
+    else:
+        raise Exception(f"teacher {teacher} not found.")
     if logits is None:
-        raise Exception("logits not found.")
+        raise Exception(f"logits not found for teacher: {teacher} and dataset {dataset_name}.")
     return logits
 
 

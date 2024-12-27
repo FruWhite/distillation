@@ -21,12 +21,8 @@ logits_dist_losses = {"KD": losses.KLDiv,
 
 optims = {"SGD": optim.SGD, "Adam": optim.Adam, "AdamW": optim.AdamW}
 
+teachers = ("resnet50", "vit")
 # dataset_names = tuple(s for s in INFO.keys() if "3d" not in s)
-# ('pathmnist', 'chestmnist', 'dermamnist', 'octmnist', 'pneumoniamnist', 'retinamnist', 'breastmnist', 'bloodmnist',
-# 'tissuemnist', 'organamnist', 'organcmnist', 'organsmnist')
-# dataset_names = (
-# 'breastmnist', 'retinamnist', 'pneumoniamnist', 'dermamnist', 'bloodmnist', 'organamnist', 'organcmnist', 'organsmnist',
-# 'pathmnist', 'octmnist', 'chestmnist', 'tissuemnist')
 
 
 ResNet50testACC = {'breastmnist': 0.812, 'retinamnist': 0.528, 'pneumoniamnist': 0.854, 'dermamnist': 0.735,
@@ -89,7 +85,7 @@ if __name__ == "__main__":
     os.environ['HF_ENDPOINT'] = 'https://hf-mirror.com'
     wandb.login(key="0124466f811cc017af995c30c7924f5e40bfda31")
 
-    # for MacOS local run:
+    # for MacOS local run, if use cuda, ignore it
     if torch.backends.mps.is_available():
         DEVICE = torch.device("mps")
         print("use mps as DEVICE")
@@ -98,7 +94,6 @@ if __name__ == "__main__":
         assert torch.cuda.is_available(), "CUDA is not available"
         DEVICE = "cuda"
 
-    # problem Make sure that the channel dimension of the pixel values match with the one set in the configuration. Expected 3 but got 1.
 
     # dataset_name = 'bloodmnist'
     # dataset_name = "pathmnist"
@@ -115,7 +110,11 @@ if __name__ == "__main__":
 
     config = Namespace(
         project_name="cv-pj-new",
-        batchsize=256, # MacOS: 32, cuda: 4090d(24G): 256[ok]
+        batchsize=256,
+        # MacOS: 32,
+        # 4090d(24G): 256[ok, 2.6~3.5s/it, full]
+        # A800(80G): 1024[ok, 4.9~5.2s/it, full]
+        # H20(80G): 1024[ok, 7.6~8.3s/it, full]
         lr=1e-3,
         optim='Adam',
         epochs=10,
@@ -126,6 +125,7 @@ if __name__ == "__main__":
         loss_type="KD",
         loss_init_params=(),
         use_saved_teacher_logits=True,
+        teacher = "resnet50",
         teacher_test_acc = ResNet50testACC[dataset_name],
         device = DEVICE
     )
@@ -135,8 +135,6 @@ if __name__ == "__main__":
     # show_data(val_loader)
 
     # kd_main(config)
-    # i = 0 # 0, 1, 2, 3, 4, 5
-    # print(dataset_names)
 
     dataset_names = (
         'breastmnist', 'retinamnist', 'pneumoniamnist', 'dermamnist', 'bloodmnist', 'organamnist', 'organcmnist',
@@ -144,8 +142,10 @@ if __name__ == "__main__":
         'pathmnist', 'octmnist', 'chestmnist', 'tissuemnist')
 
     set = []
-    set.append(('breastmnist', 'retinamnist', 'pneumoniamnist', 'dermamnist',
-            'bloodmnist', 'organcmnist', 'organsmnist'))
+
+    # set.append(('breastmnist', 'retinamnist', 'pneumoniamnist', 'dermamnist',
+    #         'bloodmnist', 'organcmnist', 'organsmnist'))
+    set.append(('bloodmnist', 'organcmnist', 'organsmnist'))
     set.append(('organamnist', ))
     set.append(('pathmnist', ))
     set.append(('octmnist', ))

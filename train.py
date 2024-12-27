@@ -14,21 +14,20 @@ def kd_epoch(student_model, teacher_model, train_loader, optimizer, loss_fn, con
     student_model.train()
     total_loss = 0
     if not config.use_saved_teacher_logits:
+        if config.teacher == "resnet50":
+            raise Exception(f"teacher {config.teacher} is not available in local now. please use saved logits.\n(set config.use_saved_teacher_logits to True)")
+
         for images, labels in tqdm(train_loader):
             images, labels = images.to(DEVICE), labels.to(DEVICE)
 
-            # 教师模型输出（无需梯度）
             with torch.no_grad():
                 teacher_logits = teacher_model(images)
 
-            # 学生模型输出
             student_logits = student_model(images)
 
-            # 计算损失
             loss = loss_fn(student_logits, teacher_logits, labels)
             total_loss += loss.item()
 
-            # 反向传播与优化
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
@@ -55,6 +54,10 @@ def kd_epoch(student_model, teacher_model, train_loader, optimizer, loss_fn, con
                 # print(teacher_logits.shape)
                 # print(student_logits.shape)
                 # print(labels.shape)
+
+            if config.dataset_name == "chestmnist" or labels.shape[1] > 1:  # one-hot label
+                labels = torch.argmax(labels, -1)
+
 
             # 计算损失
             loss = loss_fn(student_logits, teacher_logits, labels)
@@ -95,9 +98,9 @@ def kd_train(student_model, teacher_model, train_loader, val_loader, optim, dist
     wandb.init(project=config.project_name, config=config.__dict__, name=nowtime, save_code=True)
     student_model.run_id = wandb.run.id
     student_model.best_metric = -1.
-    logits = None
+    logits = None 
     if config.use_saved_teacher_logits:
-        logits = load_teacher_logits_tensor(config.dataset_name)
+        logits = load_teacher_logits_tensor(config.dataset_name, teacher=config.teacher)
 
     for epoch in range(EPOCHS):
         print(f"Epoch {epoch + 1}/{EPOCHS}")
