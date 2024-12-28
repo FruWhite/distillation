@@ -12,6 +12,7 @@ from models import ViTTeacher, StudentModel
 from train import *
 from medmnist import INFO
 import losses
+from sklearn.metrics import f1_score
 
 
 logits_dist_losses = {"KD": losses.KLDiv,
@@ -27,8 +28,7 @@ teachers = ("resnet50", "vit")
 
 ResNet50testACC = {'breastmnist': 0.812, 'retinamnist': 0.528, 'pneumoniamnist': 0.854, 'dermamnist': 0.735,
                    'bloodmnist': 0.956, 'organamnist': 0.935, 'organcmnist': 0.905, 'organsmnist': 0.770,
-'pathmnist': 0.911, 'octmnist': 0.762, 'chestmnist': 0.947, 'tissuemnist': 0.680}
-
+                   'pathmnist': 0.911, 'octmnist': 0.762, 'chestmnist': 0.947, 'tissuemnist': 0.680}
 
 
 def kd_main(config):
@@ -58,6 +58,21 @@ def kd_main(config):
     return test_acc
 
 
+def f1score_main(config):
+    assert config.train_type == 'f1score', "wrong training main func"
+    class_num = config.class_num
+
+    train_loader, val_loader, test_loader = load_medmnist(config)
+
+    # 加载已经训练好的模型
+    model_path = './students/retinamnist_stu_fromResNet50_KD_10ep_256bs.pth'
+    baseline_stu_model = StudentModel(class_num).to(DEVICE)
+    baseline_stu_model.load_state_dict(torch.load(model_path))
+    baseline_stu_model.eval()  # 切换到评估模式
+
+    f1_score_value = evaluate_f1_score(baseline_stu_model, test_loader, config)
+    print(f"F1 Score: {f1_score_value:.4f}")
+    return f1_score_value
 
 
 def main_logits(config, datasets, losses):
@@ -94,7 +109,6 @@ if __name__ == "__main__":
         assert torch.cuda.is_available(), "CUDA is not available"
         DEVICE = "cuda"
 
-
     # dataset_name = 'bloodmnist'
     # dataset_name = "pathmnist"
     # dataset_name = 'chestmnist'
@@ -111,7 +125,8 @@ if __name__ == "__main__":
     config = Namespace(
         project_name="cv-pj-new",
         batchsize=256,
-        # MacOS: 32,
+        # MacOS(local), vit: 32,
+        # resnet:
         # 4090d(24G): 256[ok, 2.6~3.5s/it, full]
         # A800(80G): 1024[ok, 4.9~5.2s/it, full]
         # H20(80G): 1024[ok, 7.6~8.3s/it, full]
@@ -125,9 +140,9 @@ if __name__ == "__main__":
         loss_type="KD",
         loss_init_params=(),
         use_saved_teacher_logits=True,
-        teacher = "resnet50",
-        teacher_test_acc = ResNet50testACC[dataset_name],
-        device = DEVICE
+        teacher="resnet50",
+        teacher_test_acc=ResNet50testACC[dataset_name],
+        device=DEVICE
     )
     # # show_data(load_medmnist(config)[0])
     # save_teacher_logits(config)
@@ -146,15 +161,13 @@ if __name__ == "__main__":
     # set.append(('breastmnist', 'retinamnist', 'pneumoniamnist', 'dermamnist',
     #         'bloodmnist', 'organcmnist', 'organsmnist'))
     set.append(('bloodmnist', 'organcmnist', 'organsmnist'))
-    set.append(('organamnist', ))
-    set.append(('pathmnist', ))
-    set.append(('octmnist', ))
-    set.append(('chestmnist', ))
+    set.append(('organamnist',))
+    set.append(('pathmnist',))
+    set.append(('octmnist',))
+    set.append(('chestmnist',))
 
-    i = 0 # 0, 1, 2, 3, 4
+    i = 0  # 0, 1, 2, 3, 4
     df = main_logits(config, set[i], logits_dist_losses.keys())
 
     print(df)
     df.to_csv(f"result/final_{i}.csv", sep=',', index=True, header=True)
-
-

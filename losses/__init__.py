@@ -14,4 +14,5 @@ from .dkd import DKD
 from .kd import KLDiv
 from .review import ReviewKD
 from .rkd import RKD
+from .ctkd import CTKD
 from .combined import LogitsDistillLoss

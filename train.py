@@ -7,6 +7,7 @@ import torch.nn as nn
 import wandb
 import numpy as np
 from dataload import load_teacher_logits_tensor
+from sklearn.metrics import f1_score
 
 
 def kd_epoch(student_model, teacher_model, train_loader, optimizer, loss_fn, config, logits=None):
@@ -90,6 +91,29 @@ def evaluate(model, test_loader, config):
             loop.set_postfix(accuracy=correct / total)
     return correct / total
 
+def evaluate_f1_score(model, test_loader, config):
+    DEVICE = config.device
+    model.eval()
+    all_preds = []
+    all_labels = []
+
+    # 添加进度条
+    loop = tqdm(test_loader, desc="Evaluating", ncols=100)
+    with torch.no_grad():
+        for images, labels in loop:
+            labels = labels.squeeze()
+            images, labels = images.to(DEVICE), labels.to(DEVICE)
+            outputs = model(images)
+            _, predicted = torch.max(outputs, 1)
+            all_preds.extend(predicted.cpu().numpy())  # 将预测结果存入列表
+            all_labels.extend(labels.cpu().numpy())  # 将真实标签存入列表
+            loop.set_postfix()
+    # 计算 F1 分数
+    f1 = f1_score(all_labels, all_preds, average='weighted')  # 使用加权平均计算F1分数
+    return f1
+
+
+
 
 def kd_train(student_model, teacher_model, train_loader, val_loader, optim, distillation_loss, config):
     EPOCHS = config.epochs
@@ -98,7 +122,7 @@ def kd_train(student_model, teacher_model, train_loader, val_loader, optim, dist
     wandb.init(project=config.project_name, config=config.__dict__, name=nowtime, save_code=True)
     student_model.run_id = wandb.run.id
     student_model.best_metric = -1.
-    logits = None 
+    logits = None
     if config.use_saved_teacher_logits:
         logits = load_teacher_logits_tensor(config.dataset_name, teacher=config.teacher)
 
@@ -106,7 +130,9 @@ def kd_train(student_model, teacher_model, train_loader, val_loader, optim, dist
         print(f"Epoch {epoch + 1}/{EPOCHS}")
         train_loss = kd_epoch(student_model, teacher_model, train_loader, optim, distillation_loss, config, logits)
         val_accuracy = evaluate(student_model, val_loader, config)
+        # f1_score_val = evaluate(student_model, val_loader)
         print(f"Loss: {train_loss:.4f}, Val Accuracy: {val_accuracy:.4f}")
+        # print(f"Loss: {train_loss:.4f}, F1 score: {f1_score_val:.4f}")
         if val_accuracy > student_model.best_metric:
             student_model.best_metric = val_accuracy
         wandb.log({'epoch': epoch + 1, "val_acc": val_accuracy, "best_val_acc": student_model.best_metric})
